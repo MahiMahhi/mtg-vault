@@ -1,17 +1,24 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { catchError, map, of } from 'rxjs';
+import { catchError, forkJoin, map, of } from 'rxjs';
 import { Item } from './store.service';
 
 export type CardPrint = Pick<Item, 'cardId' | 'name' | 'set' | 'setName' | 'cn' | 'rarity' | 'type' | 'colors' | 'img' | 'oracle' | 'mana' | 'artist' | 'price' | 'priceFoil'>;
 
-/** Card data provider (Scryfall). Replace this class to support another provider. */
+/** Card data provider (Scryfall): real card images + current prices. Replace this class to change provider. */
 @Injectable({ providedIn: 'root' })
 export class Scryfall {
   private http = inject(HttpClient);
   search(q: string) {
     return this.http.get<any>('https://api.scryfall.com/cards/search', { params: { q, unique: 'prints', order: 'released' } }).pipe(
       map(r => (r.data as any[]).slice(0, 40).map(c => this.map(c))), catchError(() => of([] as CardPrint[])));
+  }
+  /** Re-fetch today's prices for owned cards (batch endpoint, 75 per request). */
+  refresh(ids: string[]) {
+    if (!ids.length) return of([] as CardPrint[]);
+    const chunks: string[][] = []; for (let i = 0; i < ids.length; i += 75) chunks.push(ids.slice(i, i + 75));
+    return forkJoin(chunks.map(ch => this.http.post<any>('https://api.scryfall.com/cards/collection', { identifiers: ch.map(id => ({ id })) })
+      .pipe(map(r => r.data as any[]), catchError(() => of([] as any[]))))).pipe(map(a => a.flat().map(c => this.map(c))));
   }
   private map(c: any): CardPrint {
     const f = c.card_faces?.[0];

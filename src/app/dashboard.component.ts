@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { RARITY_COLORS, Store, unit } from './store.service';
+import { Scryfall } from './scryfall.service';
 
 @Component({ selector: 'app-count', standalone: true, template: `{{ txt() }}` })
 export class CountComponent implements OnChanges {
@@ -29,8 +30,10 @@ export class CountComponent implements OnChanges {
   </div>
   <div class="actions">
     <a class="btn" routerLink="/add">＋ Add Card</a><a class="btn ghost" routerLink="/collection">🔎 Search Collection</a>
+    <button class="btn ghost" (click)="refresh()">{{ busy() ? '⏳ Updating…' : '🔄 Refresh prices' }}</button>
     <span class="btn ghost off" title="Version 2">📷 Scan (soon)</span><span class="btn ghost off" title="Version 2">❤️ Wishlist (soon)</span>
   </div>
+  <p class="muted">{{ stamp() }} · source: Scryfall</p>
   @if (!store.items().length) {
     <div class="empty glass"><div class="float">🃏</div><h3>Your vault is empty</h3><p>Add your first card to see stats, value and charts come alive.</p><a class="btn" routerLink="/add">Add your first card</a></div>
   } @else {
@@ -56,8 +59,14 @@ export class CountComponent implements OnChanges {
   }`,
 })
 export class DashboardComponent {
-  store = inject(Store);
-  price = unit;
+  store = inject(Store); private sf = inject(Scryfall);
+  price = unit; busy = signal(false);
+  constructor() { if (this.store.items().length) this.refresh(); }
+  stamp = () => (this.store.updatedAt() ? 'Prices updated ' + new Date(this.store.updatedAt()).toLocaleString() : 'Prices not refreshed yet');
+  refresh() {
+    this.busy.set(true);
+    this.sf.refresh([...new Set(this.store.items().map(i => i.cardId))]).subscribe(l => { if (l.length) this.store.updatePrices(l); this.busy.set(false); });
+  }
   stats = computed(() => [
     { l: 'Total cards', v: this.store.totalCards(), m: false }, { l: 'Unique cards', v: this.store.unique(), m: false },
     { l: 'Collection value', v: this.store.value(), m: true }, { l: 'Sets', v: this.store.sets(), m: false },

@@ -18,6 +18,7 @@ export class Store {
   private key = () => `mtgvault.collection.v1.${this.auth.user()?.sub ?? 'guest'}`;
   private load = (): Item[] => JSON.parse(localStorage.getItem(this.key()) || '[]');
   items = signal<Item[]>(this.load());
+  updatedAt = signal<number>(+(localStorage.getItem('mtgvault.pricesAt') || 0));
   constructor() { effect(() => { this.auth.user(); untracked(() => this.items.set(this.load())); }); }
   private commit(l: Item[]) { this.items.set(l); localStorage.setItem(this.key(), JSON.stringify(l)); }
 
@@ -43,4 +44,10 @@ export class Store {
     this.commit(qty <= 0 ? this.items().filter(i => i.id !== id) : this.items().map(i => (i.id === id ? { ...i, qty } : i)));
   }
   remove(id: string) { this.commit(this.items().filter(i => i.id !== id)); }
+  /** Apply freshly fetched market prices to owned cards. */
+  updatePrices(l: { cardId: string; price: number; priceFoil: number }[]) {
+    const m = new Map(l.map(c => [c.cardId, c]));
+    this.commit(this.items().map(i => { const n = m.get(i.cardId); return n ? { ...i, price: n.price, priceFoil: n.priceFoil } : i; }));
+    this.updatedAt.set(Date.now()); localStorage.setItem('mtgvault.pricesAt', String(Date.now()));
+  }
 }

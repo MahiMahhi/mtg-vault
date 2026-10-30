@@ -6,7 +6,7 @@ export interface User { sub: string; name: string; email: string; picture: strin
 declare const google: any;
 const KEY = 'mtgvault.user';
 
-/** Google Identity Services login (client-side only; no backend). */
+/** Google Identity Services login (client-side only; used for sign-in only). */
 @Injectable({ providedIn: 'root' })
 export class Auth {
   private router = inject(Router); private zone = inject(NgZone);
